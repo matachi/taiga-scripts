@@ -1,24 +1,26 @@
 #!/bin/bash
 
-sudo dnf -y update
+# Get the name of the user account, even if run with sudo
+USER=`logname`
+HOME=`eval echo ~$USER`
 
-sudo dnf install -y postgresql-server postgresql-contrib postgresql-devel
-sudo systemctl enable postgresql
-sudo postgresql-setup --initdb
-sudo systemctl start postgresql
+dnf -y update
+
+dnf install -y postgresql-server postgresql-contrib postgresql-devel
+systemctl enable postgresql
+postgresql-setup --initdb
+systemctl start postgresql
 sudo -u postgres createuser --superuser $USER &> /dev/null
 sudo -u postgres createdb taiga &> /dev/null
 
-sudo dnf group install -y "Development Tools"
-sudo dnf install -y redhat-rpm-config freetype-devel zlib-devel zeromq-devel gdbm-devel ncurses-devel libffi-devel
-sudo dnf install -y git tmux
+dnf group install -y "Development Tools"
+dnf install -y redhat-rpm-config freetype-devel zlib-devel zeromq-devel gdbm-devel ncurses-devel libffi-devel
+dnf install -y git tmux
 
-sudo dnf install -y python3-devel python-virtualenvwrapper libxml2-devel libxslt-devel
-source /usr/bin/virtualenvwrapper.sh
-
+dnf install -y python3-devel libxml2-devel libxslt-devel
 
 
-pushd ~
+
 cat > /tmp/settings.py <<EOF
 from .common import *
 
@@ -43,34 +45,32 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 #EMAIL_PORT = 25
 
 EOF
+sudo chown $USER:$USER /tmp/settings.py
 
-if [ ! -e ~/taiga-back ]; then
-    git clone https://github.com/taigaio/taiga-back.git taiga-back
-    pushd ~/taiga-back
-    git checkout -f stable
+if [ ! -e $HOME/taiga-back ]; then
+    sudo -u $USER git clone https://github.com/taigaio/taiga-back.git taiga-back
+    pushd $HOME/taiga-back
+    sudo -u $USER git checkout -f stable
 
-    mv /tmp/settings.py settings/local.py
+    sudo -u $USER mv /tmp/settings.py settings/local.py
 
-    mkvirtualenv taiga -p /usr/bin/python3.4
-    workon taiga
+    sudo -u $USER pyvenv env
+    BIN=$HOME/taiga-back/env/bin
 
-    pip install -r requirements.txt
-    python manage.py migrate --noinput
-    python manage.py compilemessages
-    python manage.py collectstatic --noinput
-    python manage.py loaddata initial_user
-    python manage.py loaddata initial_project_templates
-    python manage.py loaddata initial_role
-    python manage.py sample_data
+    sudo -u $USER $BIN/pip install -r requirements.txt
+    sudo -u $USER $BIN/python manage.py migrate --noinput
+    sudo -u $USER $BIN/python manage.py compilemessages
+    sudo -u $USER $BIN/python manage.py collectstatic --noinput
+    sudo -u $USER $BIN/python manage.py loaddata initial_user
+    sudo -u $USER $BIN/python manage.py loaddata initial_project_templates
+    sudo -u $USER $BIN/python manage.py loaddata initial_role
+    sudo -u $USER $BIN/python manage.py sample_data
 
-    deactivate
     popd
 fi
-popd
 
 
 
-pushd ~
 cat > /tmp/conf.json <<EOF
 {
     "api": "http://localhost:8000/api/v1/",
@@ -85,25 +85,24 @@ cat > /tmp/conf.json <<EOF
     "contribPlugins": []
 }
 EOF
+sudo chown $USER:$USER /tmp/conf.json
 
-if [ ! -e ~/taiga-front ]; then
-    git clone https://github.com/taigaio/taiga-front-dist.git taiga-front
-    pushd ~/taiga-front
-    git checkout -f stable
-    mv /tmp/conf.json dist/js/
+if [ ! -e $HOME/taiga-front ]; then
+    sudo -u $USER git clone https://github.com/taigaio/taiga-front-dist.git $HOME/taiga-front
+    pushd $HOME/taiga-front
+    sudo -u $USER git checkout -f stable
+    sudo -u $USER mv /tmp/conf.json dist/js/
     popd
 fi
-popd
 
 
 
-sudo firewall-cmd --add-port=8000/tcp
-sudo firewall-cmd --permanent --add-port=8000/tcp
-sudo firewall-cmd --add-port=9000/tcp
-sudo firewall-cmd --permanent --add-port=9000/tcp
+firewall-cmd --add-port=8000/tcp
+firewall-cmd --permanent --add-port=8000/tcp
+firewall-cmd --add-port=9000/tcp
+firewall-cmd --permanent --add-port=9000/tcp
 
-pushd ~
-cat > ~/.tmux-conf.sh <<EOF
+cat > $HOME/.tmux-conf.sh <<EOF
 function taiga-runserver {
     session=taiga
     tmux new-session -ds \$session -n servers
@@ -119,13 +118,14 @@ function taiga-runserver-front {
 }
 
 function taiga-runserver-back {
-    workon taiga
     cd ~/taiga-back
+    source env/bin/activate
     python manage.py runserver 0.0.0.0:8000
 }
 EOF
+sudo chown $USER:$USER $HOME/.tmux-conf.sh
 
-cat > ~/.bash_profile <<EOF
+cat > $HOME/.bash_profile <<EOF
 [[ -s "\$HOME/.tmux-conf.sh" ]] && source "\$HOME/.tmux-conf.sh"
 EOF
-popd
+sudo chown $USER:$USER $HOME/.bash_profile
